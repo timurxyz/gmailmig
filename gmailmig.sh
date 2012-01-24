@@ -5,7 +5,7 @@
 # the wrapped utility is imapsync.lamiral.info by Gilles Lamiral
 
 # Created by timurx as a peace of copyleft goodies, based on works of others
-# VERSION: 2012-01-24 (01c)
+# VERSION: 2012-01-24 (01d)
 # Ad: ***Visit azd.se and secmachine.com for security aware guidelines and stuff!***
 
 										helpAbout="\
@@ -84,31 +84,33 @@ if  grep -q "\s--help\s" <<< $ExeArguments ; then
 fi 
 
 if  grep -q "\s-T\s" <<< $ExeArguments &&  grep -q "\s-X\s" <<< $ExeArguments ; then
-  echo -e "gmailmig:: Defining both test and productive mode is contradictiry.\n$helpUsage" ; exit 1
+  echo -e "gmailmig: Defining both test and productive mode is contradictiry.\n$helpUsage" ; exit 1
 fi
 
 if  grep -q "\s-c\s" <<< $ExeArguments ; then   # The custom configuration file case
 
   if [[ $(  sed -r 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments ) == $ExeArguments ]]; then
-    echo -e "gmailmig:: Configuration file option is not valid.\n$helpUsage" ; exit 1
+    echo -e "gmailmig: Configuration file option is not valid.\n$helpUsage" ; exit 1
   fi
 
   ConfigFile=$(  sed -r 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments )    
 
   if [ ! -r "$ConfigFile" ]; then
-    echo "gmailmig:: Configuration file does not exist or is not accessable: $ConfigFile" ; exit 1
+    echo "gmailmig: Configuration file does not exist or is not accessable: $ConfigFile" ; exit 1
   fi
 fi
 
-if [ ! -r "$ConfigFile" ]; then
-  echo -e "gmailmig:: Proceed with no configuration file available."
-else
-
-## Process the config file, settings round 1
+## Init some variables
 
 ExeNoKFile=false
 ExeSshAskpass=false
 iMapFolders=0
+
+## Process the config file, settings round 1
+
+if [ ! -r "$ConfigFile" ]; then
+  echo -e "gmailmig: Proceed with no configuration file available."
+else
 
 ConfigSection=''
 while read ConfigLine ; do
@@ -125,8 +127,7 @@ while read ConfigLine ; do
   else
   case $ConfigSection in
 
-  Settings)
-
+  Settings)   # todo
     ;;
 
   FolderNameMapping)
@@ -139,14 +140,12 @@ while read ConfigLine ; do
       (( iMapFolders++ ))
 
     else
-      echo "gmailmig:: Unexpected mapping definition: \"$ConfigLine\"" ; exit 1
+      echo "gmailmig: Unexpected mapping definition: \"$ConfigLine\"" ; exit 1
     fi ;;
 
-  *)  echo "gmailmig:: Unexpected configuration section: \"$ConfigSection\"" ; exit 1 ;;
+  *)  echo "gmailmig: Unexpected configuration section: \"$ConfigSection\"" ; exit 1 ;;
   esac
   fi
-
-  #echo "\"$ConfigSection\" \"$ConfigLine\""
 
 done < $ConfigFile
 fi
@@ -169,28 +168,28 @@ while [  "$*" ]; do
       logins|l)  ExeMode=' --justlogin ';;	# Authentication test
       folders|f) ExeMode=' --justfolders --dry ';;  # Dry-run for folders listing, see the logfile
       dry|d)	   ExeMode=' --dry ';;		# Dry-run, see the logfile for details
-      "")	   echo -e "gmailmig:: Missing test mode suboption.\n$helpUsage" ; exit 1 ;;
-      *)	   echo -e "gmailmig:: Unexpected test mode: $ExeOptSub\n$helpUsage" ; exit 1 ;;
+      "")	   echo -e "gmailmig: Missing test mode suboption.\n$helpUsage" ; exit 1 ;;
+      *)	   echo -e "gmailmig: Unexpected test mode: $ExeOptSub\n$helpUsage" ; exit 1 ;;
     esac ;;
 
   --execute|-X) 				# Productive run, if not testing -X must not be omitted
 
     case $ExeOptSub in
       "")	  ExeMode='*Productive*' ;;
-      *)	  echo -e "gmailmig:: Production mode should not have suboptions.\n$helpUsage" ; exit 1 ;;
+      *)	  echo -e "gmailmig: Production mode should not have suboptions.\n$helpUsage" ; exit 1 ;;
     esac ;;
 
   --dates|-d)         # The interval to synchronize, in from-to form, eg. 20040101-20120531
 
     case $ExeOptSub in
-      "")   echo -e "gmailmig:: No interval provided for --dates.\n$helpUsage" ; exit 1 ;;
+      "")   echo -e "gmailmig: No interval provided for --dates.\n$helpUsage" ; exit 1 ;;
       *)    MessageDates=$ExeOptSub ;;
     esac ;;
 
   --days)         # The interval to synchronize, in days, eg. 370-377
 
     case $ExeOptSub in
-      "")   echo -e "gmailmig:: No interval provided for --days.\n$helpUsage" ; exit 1 ;;
+      "")   echo -e "gmailmig: No interval provided for --days.\n$helpUsage" ; exit 1 ;;
       *)    MessageDays=$ExeOptSub ;;
     esac ;;
 
@@ -198,7 +197,7 @@ while [  "$*" ]; do
  
     ExeNoKFile=true
     case $ExeOptSub in
-      "")   echo -e "gmailmig:: No actual source account provided.\n$helpUsage" ; exit 1 ;;
+      "")   echo -e "gmailmig: No actual source account provided.\n$helpUsage" ; exit 1 ;;
       *)    AccountSource=$ExeOptSub ;;
     esac ;;
 
@@ -206,7 +205,7 @@ while [  "$*" ]; do
 
     ExeNoKFile=true
     case $ExeOptSub in
-      "")   echo -e "gmailmig:: No actual target account provided.\n$helpUsage" ; exit 1 ;;
+      "")   echo -e "gmailmig: No actual target account provided.\n$helpUsage" ; exit 1 ;;
       *)    AccountTarget=$ExeOptSub ;;
     esac ;;
 
@@ -219,46 +218,47 @@ while [  "$*" ]; do
   --help) ;; # Help and config are already preprocessed, see round 0
   --config|-c) ;; 
 
-  *)		echo -e "gmailmig:: Unexpected option: \"$ExeOpt\"\n$helpUsage" ; exit 1 ;;
+  *)		echo -e "gmailmig: Unexpected option: \"$ExeOpt\"\n$helpUsage" ; exit 1 ;;
 
   esac
   shift
 done
 
+
 ## Review settings
 
 if [ -z "$ExeMode" ]; then
-  echo -e "gmailmig:: Define test or productive mode.\n$helpUsage" ; exit 1
+  echo -e "gmailmig: Define test or productive mode.\n$helpUsage" ; exit 1
 fi
 
 if  $ExeNoKFile ; then
 
   if [  -z "$AccountSource" ]||[  -z "$AccountTarget" ]; then
-    echo -e "gmailmig:: Both source and target accounts must be provided.\n$helpUsage" ; exit 1
+    echo -e "gmailmig: Both source and target accounts must be provided.\n$helpUsage" ; exit 1
   fi
   if  $ExeSshAskpass &&[[ $(  which ssh-askpass ) = "" ]]; then
-    echo "gmailmig:: Failed to locate ssh-askpass." ; exit 1
+    echo "gmailmig: Failed to locate ssh-askpass." ; exit 1
   fi
 
 else
 
   if  $ExeSshAskpass ; then
-    echo -e "gmailmig:: --ssh-askpass option is to be used in the --source --target case only.\n$helpUsage" ; exit 1
+    echo -e "gmailmig: --ssh-askpass option is to be used in the --source --target case only.\n$helpUsage" ; exit 1
   fi
   if [ -r "$kFile" ]; then
     if [ $( stat -c %a $kFile ) -ne 600 ]; then 
       if 
          ! chmod u=rw,go= $kFile ; then
-	    echo "gmailmig:: Failed to fix permissions to "u=rw,go=" in: $kFile" ; exit 1
+	    echo "gmailmig: Failed to fix permissions to "u=rw,go=" in: $kFile" ; exit 1
       fi
     fi
   else
-    echo "gmailmig:: Credentials file does not exist or is not accessable: $kFile" ; exit 1
+    echo "gmailmig: Credentials file does not exist or is not accessable: $kFile" ; exit 1
   fi
 fi
 
 if [ -n "$MessageDates" ] && [ -n "$MessageDays" ]; then
-  echo -e "gmailmig:: Defining both --dates and --days makes no sense, see --help.\n$helpUsage" ; exit 1
+  echo -e "gmailmig: Defining both --dates and --days makes no sense, see --help.\n$helpUsage" ; exit 1
 fi
 
 ## The credentials
@@ -421,7 +421,7 @@ echo -en "  Target account: $AccountTarget" | tee -a $LogFile
 if ! $ExeNoKFile ||  $ExeSshAskpass ; then
 echo -e ", pwd length: ${#AccountTargetPassword}" | tee -a $LogFile
 else
-echo -e "." | tee -a $LogFile
+echo -e ". \n\t  (Stdout is not suppressed due to this password acquiring method.)" | tee -a $LogFile
 fi
 
 echo "gmailmig: Mode: $ExeMode. Including messages from $( date --utc --date "today -"$MessageDayMax" days" +%Y-%b-%d ) to $( date --utc --date "today -"$MessageDayMin" days" +%Y-%b-%d )."  | tee -a $LogFile
