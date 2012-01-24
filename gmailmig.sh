@@ -2,9 +2,10 @@
 
 # gmailmig.sh
 # This bash script is a wrapper of imapsync to migrate your mail btw gmail/gapps accounts
+# the wrapped utility is imapsync.lamiral.info by Gilles Lamiral
 
 # Created by timurx as a peace of copyleft goodies, based on works of others
-# VERSION: 2012-01-21 (001b)
+# VERSION: 2012-01-24 (01c)
 # Ad: ***Visit azd.se and secmachine.com for security aware guidelines and stuff!***
 
 										helpAbout="\
@@ -13,47 +14,53 @@ A wrapper of the imapsync utility for better migration btw gmail/gapps accounts.
 										helpUsage="
 USAGE:  gmailmig.sh --execute|-X | --test|-T[ logins | folders | dry ]
                           [--dates|-d Latest-Oldest] | [--days Min-Max]
+                          [--source <full-mailaddress> --target <full-mailaddress> [-- ssh-askpass]] |
 			  [-k <path-to-the-credentials-file> ]
 			  [--config|-c <custom-config-file-path> ]
                           [--help] [-o YourImapsyncOptions]
 Note:   Expose only temporary passwords in the credential file if possible!
-	Delete that file soon."
+	Delete that file soon. Or use --source --target (and optionally --ssh-askpass)."
 
 										helpContd="
 PREREQUISITES:
-- you have to provide your gmail credentials in a file which by default is
-  ~/credentials_gmailmig (this configuration can be overriden by -k)
-  the format of the credentials file is provided in the bottom of the script file
-  Warning: such vulnerable form of password storage is chosen with
-  temporary password usage in mind, if you do not use temporary password for the task,
-  you leave your credentials exposed anyway
-- you are supposed to run this script in a sequence of test modes first (see --test option):
-  1) loginS, 2) folders, 3) dry -- and only then you allow the --execute to run
-- examine the log file for the details of the test runs
-  log file: ~/gmailmig.log (no option to override, edit the script if ought to)
+- You are supposed to run this script in a sequence of test modes first (see --test option):
+  1) loginS, 2) folders, 3) dry -- and only then you allow the --execute to run.
+- Examine the log file for the details of the test runs.
+  log file: ~/gmailmig.log (no option to override, edit the script if ought to, pwds are not exposed there)
+- Consider the password provision mode that fits your situation: in a trusted environment 
+  you may use the credential file feature, using temporary passwords would be a wise choice.
+- Instead you may provide the accounts as arguments (see the --source --target options) 
+  though typing passwords for test rounds again and again can be a pain.
 
 OPTIONS:
--X, --execute: runs in productive mode
--T, --test: runs in test mode, variants: logins, folders, dry
+-X, --execute:  runs in productive mode
+-T, --test:  runs in test mode, variants: logins, folders, dry
       the first is to test your credentials (mind the plural form),
       the second is to review folder mismatches, see the log for details
       the last one (dry) is to simulate the final process (combine it with
       limiting the synchronized period, see option --days newest-oldest to shorten the test)
--d, --dates: defines the period to synchronize in form of YYYYMMDD-YYYYMMDD, eg: 20040401-20121221
+-d, --dates:  defines the period to synchronize in form of YYYYMMDD-YYYYMMDD, eg: 20040401-20121221
       on the both sides of '-' you can provide any date string date command understands
       (eg: --dates '1 year ago'-today )
---days: defines the age of messages to synchronize in form of StartFromDay-FinishOnDay
+--days:  defines the age of messages to synchronize in form of StartFromDay-FinishOnDay
       where both numbers are relative to the current day, so the last year would be: 0-365
       (this definition of the period to synchronize is native to imapsync, though quite useless)
+--source,--target:  instead of using a credentials file obtains accounts definition from these arguments
+      and will propt for passwords 
+--ssh-askpass:  propts for passwords via ssh-askpass (password is passed then via this script)
 -c, --config:  overrides the default location of the configuration file (~/gmailmig.conf)
 -o    : lets define your own set of imapsync paramethers
 -k    : overrides the default location of the credentals file (~/credentials_gmailmig)
 --help: prints this synopsis
 
 NOTES:
-- script sets the temporary folder of imapsync to ~/gmailmig_tmp (hardcoded)
-  and removes it on exit anyway
-- also see the appendix at the bottom of the script file"
+- This script sets the temporary folder of imapsync to ~/gmailmig_tmp (hardcoded)
+  and erases it on exit anyway.
+- In the default case you provide your gmail/gapps credentials in a file which by default is
+  ~/credentials_gmailmig (this configuration can be overriden by -k)
+  the format of the credentials file is provided in the bottom of the script file.
+  Warning: such a vulnerable form of password provision is chosen with temporary password usage in mind.
+- Also see the appendix at the bottom of the script file."
 
 ###DO
 
@@ -63,6 +70,10 @@ ConfigFile=$HOME'/gmailmig.conf'
 kFile=$HOME'/credentials_gmailmig'
 LogFile=$HOME'/gmailmig.log'
 TempDir=$HOME'/gmailmig_tmp'
+
+# Default settings
+
+ExeRoundMax=25
 
 ## Preprocess the command line, settings round 0
 
@@ -89,13 +100,15 @@ if  grep -q "\s-c\s" <<< $ExeArguments ; then   # The custom configuration file 
   fi
 fi
 
-iMapFolders=0
-
 if [ ! -r "$ConfigFile" ]; then
   echo -e "gmailmig:: Proceed with no configuration file available."
 else
 
 ## Process the config file, settings round 1
+
+ExeNoKFile=false
+ExeSshAskpass=false
+iMapFolders=0
 
 ConfigSection=''
 while read ConfigLine ; do
@@ -181,6 +194,24 @@ while [  "$*" ]; do
       *)    MessageDays=$ExeOptSub ;;
     esac ;;
 
+  --source)       # Obtain the source account
+ 
+    ExeNoKFile=true
+    case $ExeOptSub in
+      "")   echo -e "gmailmig:: No actual source account provided.\n$helpUsage" ; exit 1 ;;
+      *)    AccountSource=$ExeOptSub ;;
+    esac ;;
+
+  --target)     # Obtain the target account
+
+    ExeNoKFile=true
+    case $ExeOptSub in
+      "")   echo -e "gmailmig:: No actual target account provided.\n$helpUsage" ; exit 1 ;;
+      *)    AccountTarget=$ExeOptSub ;;
+    esac ;;
+
+  --ssh-askpass)    ExeSshAskpass=true;;  # Propts for passwords via ssh-askpass
+      
   -o)   ExeExtraOptions=$ExeOptSub ;; # User defined options to pass to imapsync, not checked
 
   -k)   kFile=$ExeOptSub ;;   # The custom credentials file
@@ -200,15 +231,30 @@ if [ -z "$ExeMode" ]; then
   echo -e "gmailmig:: Define test or productive mode.\n$helpUsage" ; exit 1
 fi
 
-if [ -r "$kFile" ]; then
-  if [ $( stat -c %a $kFile ) -ne 600 ]; then 
-    if 
-       ! chmod u=rw,go= $kFile ; then
-	  echo -e "gmailmig:: Failed to fix permissions to "u=rw,go=" in: $kFile" ; exit 1
-    fi
+if  $ExeNoKFile ; then
+
+  if [  -z "$AccountSource" ]||[  -z "$AccountTarget" ]; then
+    echo -e "gmailmig:: Both source and target accounts must be provided.\n$helpUsage" ; exit 1
   fi
+  if  $ExeSshAskpass &&[[ $(  which ssh-askpass ) = "" ]]; then
+    echo "gmailmig:: Failed to locate ssh-askpass." ; exit 1
+  fi
+
 else
-  echo -e "gmailmig:: Credentials file does not exist or is not accessable: $kFile" ; exit 1
+
+  if  $ExeSshAskpass ; then
+    echo -e "gmailmig:: --ssh-askpass option is to be used in the --source --target case only.\n$helpUsage" ; exit 1
+  fi
+  if [ -r "$kFile" ]; then
+    if [ $( stat -c %a $kFile ) -ne 600 ]; then 
+      if 
+         ! chmod u=rw,go= $kFile ; then
+	    echo "gmailmig:: Failed to fix permissions to "u=rw,go=" in: $kFile" ; exit 1
+      fi
+    fi
+  else
+    echo "gmailmig:: Credentials file does not exist or is not accessable: $kFile" ; exit 1
+  fi
 fi
 
 if [ -n "$MessageDates" ] && [ -n "$MessageDays" ]; then
@@ -216,26 +262,21 @@ if [ -n "$MessageDates" ] && [ -n "$MessageDays" ]; then
 fi
 
 ## The credentials
+
+if ! $ExeNoKFile ; then
 # see the notes regarding the credentials file format
 
-AccountSource=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]*)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^ \t]*)[\t].*/\1\3/' $kFile )
-AccountSourcePassword=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]+)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
-AccountTarget=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\1\3/' $kFile )
-AccountTargetPassword=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
-
-echo -e "gmailmig:\
-	Source account: $AccountSource, pwd length: ${#AccountSourcePassword} \n\t\
-	Target account: $AccountTarget, pwd length: ${#AccountTargetPassword}"
+  AccountSource=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]*)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^ \t]*)[\t].*/\1\3/' $kFile )
+  AccountSourcePassword=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]+)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
+  AccountTarget=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\1\3/' $kFile )
+  AccountTargetPassword=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
 			
 # uncomment for diagnostics 
 # echo -e "\t\t\t\""$AccountSourcePassword"\" \""$AccountTargetPassword"\"\n" 
+fi
 
 if [[ $AccountSource != *@* ]] || [[ $AccountTarget != *@* ]]; then
   echo "gmailmig: Could not catch the email addresses identifying accounts properly." ; exit 1
-fi
-
-if (( ${#AccountSourcePassword} == 0 || ${#AccountTargetPassword} == 0 )) ; then
-  echo "gmailmig: Password length must be not be zero." ; exit 1
 fi
 
 ## The interval
@@ -306,13 +347,6 @@ MessageDayMax=$gmailEpochDayAgo
 
 fi 
 
-## Logfile
-
-test -e $LogFile && ( rm $LogFile )
-
-## Communicate the task definition
-echo "gmailmig: Mode: $ExeMode. Including messages from $( date --utc --date "today -"$MessageDayMax" days" +%Y-%b-%d ) to $( date --utc --date "today -"$MessageDayMin" days" +%Y-%b-%d )."  | tee -a $LogFile
-
 ## Preparing the IMAP folder mapping options if needed
 
 ExeMapFolders=''
@@ -338,13 +372,15 @@ if (( $iMapFolders > 0 )); then
   echo "."
 fi
 
-## Communicate the log file path
-echo "gmailmig: Logfile: $LogFile"  | tee -a $LogFile
+## Logfile
+
+[ -e $LogFile ]&& ( rm $LogFile )
+echo "gmailmig: Logfile: $LogFile" | tee -a $LogFile
 
 ## Local temp folder for imapsync
 if 
   mkdir $TempDir ; then
-  echo "gmailmig: $TempDir created."
+  echo "gmailmig: $TempDir created." | tee -a $LogFile
   else
   exit 1
 fi
@@ -359,6 +395,38 @@ function fOnExit() {
 }
 
 trap fOnExit EXIT ERR 1 2 3 15
+
+## Credentials contd
+
+if  $ExeNoKFile && $ExeSshAskpass ; then
+  AccountSourcePassword=$(  ssh-askpass "Password for $AccountSource" )
+  AccountTargetPassword=$(  ssh-askpass "Password for $AccountTarget" )
+fi
+
+if ! $ExeNoKFile ||  $ExeSshAskpass ; then
+if  (( ${#AccountSourcePassword} == 0 || ${#AccountTargetPassword} == 0 )); then
+  echo "gmailmig: Password length must be not be zero." ; exit 1
+fi
+fi
+
+## Communicate the task definition
+
+echo -en "gmailmig: Source account: $AccountSource" | tee -a $LogFile
+if ! $ExeNoKFile ||  $ExeSshAskpass ; then
+echo -en ", pwd length: ${#AccountSourcePassword} \n\t" | tee -a $LogFile
+else
+echo -en ", imapsync will prompt for password. \n\t" | tee -a $LogFile
+fi
+echo -en "  Target account: $AccountTarget" | tee -a $LogFile
+if ! $ExeNoKFile ||  $ExeSshAskpass ; then
+echo -e ", pwd length: ${#AccountTargetPassword}" | tee -a $LogFile
+else
+echo -e "." | tee -a $LogFile
+fi
+
+echo "gmailmig: Mode: $ExeMode. Including messages from $( date --utc --date "today -"$MessageDayMax" days" +%Y-%b-%d ) to $( date --utc --date "today -"$MessageDayMin" days" +%Y-%b-%d )."  | tee -a $LogFile
+
+[[  $ExeMode =~ "Productive" ]]&&  ExeMode=''
 
 ### Syncronize messages, copy items not copied yet
 
@@ -376,13 +444,19 @@ imapsynccmd='imapsync '$ExeMode'
 
 echo $imapsynccmd
 
+if ! $ExeNoKFile ||  $ExeSshAskpass ; then
+  imapsynccmd=$imapsynccmd' --password1 '$AccountSourcePassword' --password2 '$AccountTargetPassword'  >> $LogFile'
+fi
+
 ( echo -n "gmailmig: Migration started at:" ; date )  | tee -a $LogFile
 
-ExeRoundMax=25 ; ExeRound=1 ;
+ExeRound=1
+
+# ! eval $imapsynccmd' --password1 "'$AccountSourcePassword'" --password2 "'$AccountTargetPassword'"' \
+#   >> $LogFile |& tee -a $LogFile
 
 while 
-! eval $imapsynccmd' --password1 "'$AccountSourcePassword'" --password2 "'$AccountTargetPassword'"' \
-		>> $LogFile |& tee -a $LogFile 
+! eval $imapsynccmd  |& tee -a $LogFile
 do
    if (( ExeRound++ < ExeRoundMax )) ; then
       echo "gmailmig: Synchronization restarted to round $ExeRound of $ExeRoundMax."  | tee -a $LogFile
@@ -402,6 +476,12 @@ tail -4 $LogFile
 
 ### credits:	James Furness base6.com, Mark seagrief.co.uk, blog.mcfang.com/author/mcfang, 
 #		Tyler Ham www.thamtech.com, Jim Geurts biasecurities.com, Feka feka.hu
+
+### todo:
+# -  settings in config
+# -  show epoch date and today, probably explain
+# -  present the relevant log excerpt
+# -  upon imapsync version...
 
 ### Credentials file format (~/credentials_gmailmig)
 # Do not expose your real secrets here, only temporary passwords!
