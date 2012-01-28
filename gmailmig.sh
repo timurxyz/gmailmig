@@ -5,7 +5,7 @@
 # the wrapped utility is imapsync.lamiral.info by Gilles Lamiral
 
 # Created by timurx as a peace of copyleft goodies, based on works of others
-# VERSION: 2012-01-24 (01d)
+# VERSION: 2012-01-28 (01ea)
 # Ad: ***Visit azd.se and secmachine.com for security aware guidelines and stuff!***
 
 										helpAbout="\
@@ -75,6 +75,18 @@ TempDir=$HOME'/gmailmig_tmp'
 
 ExeRoundMax=25
 
+# Init some variables
+
+ExeNoKFile=false
+ExeSshAskpass=false
+iMapFolders=0
+
+if [[ $( uname ) =~ "Linux" ]]; then
+  ExeSedEre='-r'
+else
+  ExeSedEre='-E'
+fi
+
 ## Preprocess the command line, settings round 0
 
 ExeArguments="< ""$*"" >" ; ExeArguments=${ExeArguments/--test/-T} ; ExeArguments=${ExeArguments/--execute/-X} ; ExeArguments=${ExeArguments/--config/-c} ;
@@ -89,22 +101,16 @@ fi
 
 if  grep -q "\s-c\s" <<< $ExeArguments ; then   # The custom configuration file case
 
-  if [[ $(  sed -r 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments ) == $ExeArguments ]]; then
+  if [[ "$(  sed "$ExeSedEre" 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments )" == $ExeArguments ]]; then
     echo -e "gmailmig: Configuration file option is not valid.\n$helpUsage" ; exit 1
   fi
 
-  ConfigFile=$(  sed -r 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments )    
+  ConfigFile="$(  sed "$ExeSedEre" 's/^.*\s-c\s+([^- ][^ ]*)\s+.*/\1/' <<< $ExeArguments )"
 
   if [ ! -r "$ConfigFile" ]; then
     echo "gmailmig: Configuration file does not exist or is not accessable: $ConfigFile" ; exit 1
   fi
 fi
-
-## Init some variables
-
-ExeNoKFile=false
-ExeSshAskpass=false
-iMapFolders=0
 
 ## Process the config file, settings round 1
 
@@ -122,7 +128,7 @@ while read ConfigLine ; do
 
   if [[ "$ConfigLine" =~ ^\s*::[\ ]*[^\ :]+[\ ]*::\s*.*$  ]]; then
 
-    ConfigSection=$(  sed -r 's/^\s*::[\ ]*([^\ :]+)[\ ]*::\s*/\1/' <<< "$ConfigLine" )
+    ConfigSection="$(  sed "$ExeSedEre" 's/^\s*::[\ ]*([^\ :]+)[\ ]*::\s*/\1/' <<< $ConfigLine )"
 
   else
   case $ConfigSection in
@@ -134,8 +140,8 @@ while read ConfigLine ; do
 
     if [[ "$ConfigLine" =~ ^\s*\"[^\"]+\"[^\"]*:[^\"]*\"[^\"]+\"\s*.*$  ]]; then
 
-      FolderSource[$iMapFolders]=$(  sed -r 's/^\s*\"([^\"]+)\"[\ \t:]*\"([^\"]+)\"\s*/\1/' <<< "$ConfigLine" )
-      FolderTarget[$iMapFolders]=$(  sed -r 's/^\s*\"([^\"]+)\"[\ \t:]*\"([^\"]+)\"\s*/\2/' <<< "$ConfigLine" )
+      FolderSource[$iMapFolders]="$(  sed "$ExeSedEre" 's/^\s*\"([^\"]+)\"[\ \t:]*\"([^\"]+)\"\s*/\1/' <<< $ConfigLine )"
+      FolderTarget[$iMapFolders]="$(  sed "$ExeSedEre" 's/^\s*\"([^\"]+)\"[\ \t:]*\"([^\"]+)\"\s*/\2/' <<< $ConfigLine )"
       
       (( iMapFolders++ ))
 
@@ -266,10 +272,10 @@ fi
 if ! $ExeNoKFile ; then
 # see the notes regarding the credentials file format
 
-  AccountSource=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]*)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^ \t]*)[\t].*/\1\3/' $kFile )
-  AccountSourcePassword=$( sed -r '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]+)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
-  AccountTarget=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\1\3/' $kFile )
-  AccountTargetPassword=$( sed -r '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )
+  AccountSource="$(  sed "$ExeSedEre" '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]*)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^ \t]*)[\t].*/\1\3/' $kFile )"
+  AccountSourcePassword="$(  sed "$ExeSedEre" '/^[ \t]*#/d;/source[: \t]/!d;s/^[ \t]*::source::([^:]*)::([^:]+)::.*|^[ \t]*source[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )"
+  AccountTarget="$(  sed "$ExeSedEre" '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\1\3/' $kFile )"
+  AccountTargetPassword="$(  sed "$ExeSedEre" '/^[ \t]*#/d;/target[: \t]/!d;s/^[ \t]*::target::([^:]*)::([^:]*)::.*|^[ \t]*target[ \t]*([^ \t]*)[\t]*([^\t]*)[\t].*/\2\4/' $kFile )"
 			
 # uncomment for diagnostics 
 # echo -e "\t\t\t\""$AccountSourcePassword"\" \""$AccountTargetPassword"\"\n" 
@@ -283,8 +289,8 @@ fi
 
 if [ -n "$MessageDates" ]; then
 
-  MessageDateMax=$(  sed -r 's/(.*)-.*/\1/' <<< $MessageDates )
-  MessageDateMin=$(  sed -r 's/.*-(.*)/\1/' <<< $MessageDates )
+  MessageDateMax="$(  sed "$ExeSedEre" 's/(.*)-.*/\1/' <<< $MessageDates )"
+  MessageDateMin="$(  sed "$ExeSedEre" 's/.*-(.*)/\1/' <<< $MessageDates )"
 
   if [[ $( date --date "$MessageDateMin" +%s ) =~ ^[0-9]+$ ]] && \
      [[ $( date --date "$MessageDateMax" +%s ) =~ ^[0-9]+$ ]]; then
@@ -298,8 +304,8 @@ if [ -n "$MessageDates" ]; then
 
 elif [ -n "$MessageDays" ]; then
 
-  MessageDayMin=$(  sed -r 's/([0-9]+)-.*/\1/' <<< $MessageDays )
-  MessageDayMax=$(  sed -r 's/.*-([0-9]+)/\1/' <<< $MessageDays )
+  MessageDayMin="$(  sed "$ExeSedEre" 's/([0-9]+)-.*/\1/' <<< $MessageDays )"
+  MessageDayMax="$(  sed "$ExeSedEre" 's/.*-([0-9]+)/\1/' <<< $MessageDays )"
 
   if [[ $MessageDayMin =~ ^[0-9]+$ ]] && [[ $MessageDayMax =~ ^[0-9]+$ ]]; then
     MessageDays=$MessageDays
@@ -357,14 +363,14 @@ if (( $iMapFolders > 0 )); then
 
   for (( i=0 ; i<$iMapFolders ; i++ ))
   do
-   if [ "$FolderSource[${i}]" != "$FolderTarget[${i}]" ]; then
+   if [ "${FolderSource[$i]}" != "${FolderTarget[$i]}" ]; then
  
-     imessage=${FolderTarget[${i}]} ; imessage=${imessage#*Gmail]}
+     imessage=${FolderTarget[$i]} ; imessage=${imessage#*Gmail]}
      echo -n " "\""$imessage"\"
  
   	# Escape these: / [ ]
-     FolderSource[$i]=$(  sed 's/\[/\\\[/g;s/\]/\\\]/g;s/\//\\\//g' <<< ${FolderSource[${i}]} )
-     FolderTarget[$i]=$(  sed 's/\[/\\\[/g;s/\]/\\\]/g;s/\//\\\//g' <<< ${FolderTarget[${i}]} )
+     FolderSource[$i]=$(  sed 's/\[/\\\[/g;s/\]/\\\]/g;s/\//\\\//g' <<< ${FolderSource[$i]} )
+     FolderTarget[$i]=$(  sed 's/\[/\\\[/g;s/\]/\\\]/g;s/\//\\\//g' <<< ${FolderTarget[$i]} )
      ExeMapFolders=$ExeMapFolders' --regextrans2 "s/'${FolderSource[$i]}'/'${FolderTarget[$i]}'/"'
    fi
   done
@@ -452,11 +458,8 @@ fi
 
 ExeRound=1
 
-# ! eval $imapsynccmd' --password1 "'$AccountSourcePassword'" --password2 "'$AccountTargetPassword'"' \
-#   >> $LogFile |& tee -a $LogFile
-
 while 
-! eval $imapsynccmd  |& tee -a $LogFile
+! eval $imapsynccmd  2>&1 | tee -a $LogFile
 do
    if (( ExeRound++ < ExeRoundMax )) ; then
       echo "gmailmig: Synchronization restarted to round $ExeRound of $ExeRoundMax."  | tee -a $LogFile
